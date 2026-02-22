@@ -1,42 +1,47 @@
-# Jarvis: Your Personal AI Assistant for Home Automation and Banter
+# Jarvis: A Voice-First AI Assistant for Home Automation and Banter
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-Internal%20WIP-orange)
-
 ![Jarvis](https://img.shields.io/badge/Jarvis-Home%20AI%20Assistant-9cf?logo=home-assistant)
 
-### ⚠️ This is still internal...needs more polishing for before public use...
+> **This project is under active development. Expect quirks, sarcasm, and the occasional snarky bug.**
 
-_⚠️ Internal WIP: This project is under active development. Expect quirks, sarcasm, and the occasional snarky bug._
-
-> "If I had a body, I'd roll my eyes at you right now. Fortunately for us both, I don't."  
+> "If I had a body, I'd roll my eyes at you right now. Fortunately for us both, I don't."
 > — Jarvis
 
 ---
 
-## 📚 Table of Contents
-- [What is Jarvis?](#-what-is-jarvis)
-- [Features](#-features-current)
-- [Planned Features](#️-planned-features)
-- [Requirements](#-requirements)
-- [Environment Variables](#-environment-variables)
-- [Voice Flow Example](#-voice-flow-example)
-- [Testing](#-testing)
-- [Credits](#-credits)
-- [License](#️-license)
+## Table of Contents
+
+- [What is Jarvis?](#what-is-jarvis)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Planned Features](#planned-features)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Project Structure](#project-structure)
+- [Voice Flow Examples](#voice-flow-examples)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
+- [License](#license)
 
 ---
 
-## 🧠 What is Jarvis?
-Jarvis is a voice-activated AI assistant built to control your smart home, entertain with personality, and evolve with memory. It combines OpenAI's GPT-4-turbo with ElevenLabs TTS, Home Assistant integrations, and long + short term memory to simulate a snarky British AI sidekick that would make Tony Stark proud.
+## What is Jarvis?
+
+Jarvis is a voice-activated AI assistant built to control your smart home, entertain with personality, and evolve with memory. It combines OpenAI's GPT-4o with ElevenLabs TTS, Deepgram streaming STT, Home Assistant integrations, and a vector-backed memory system to simulate a snarky British AI sidekick that would make Tony Stark proud.
 
 Jarvis currently runs locally on your machine and can:
+
 - Control smart devices via Home Assistant
-- Respond to your voice with ElevenLabs speech
+- Respond to your voice with ElevenLabs speech synthesis
 - Resume Spotify playlists on demand
-- Remember past interactions
+- Remember past interactions with short-term and long-term memory
 - Understand context, wit, sarcasm, and subtlety
+- Monitor infrastructure (Proxmox, Portainer, TrueNAS)
+- Route intents through a 3-tier cascade (keyword, embedding, LLM)
 - Fall back to local models when needed (planned)
 
 <p align="left">
@@ -47,64 +52,82 @@ Jarvis currently runs locally on your machine and can:
 
 ---
 
-## 📊 Architecture Diagrams
+## Architecture
 
 <details>
-<summary>🧠 High-Level Architecture (Click to expand)</summary>
+<summary>High-Level Architecture (click to expand)</summary>
 
 ```mermaid
 flowchart TD
     A["User Input"] --> B{"Input Type?"}
-    B -->|Voice| C["Audio Handler\n(Mic Input -> STT)"]
-    B -->|Text| D["Direct Input to Jarvis"]
-    C --> D
+    B -->|Voice| C["Wake Word Detection\n(Porcupine)"]
+    C --> D["Speech-to-Text\n(Deepgram Streaming)"]
+    B -->|Text| E["Direct Input"]
+    D --> E
 
-    D --> E["Conversation Handler"]
-    E --> F["Jarvis Memory\n(FAISS + Embeddings)"]
-    E --> G["OpenAI GPT API"]
-    G --> H["Plugin System\n(plugin_loader.py)"]
-    H --> I["Plugins\nHome Assistant, Proxmox, etc."]
+    E --> F["Intent Router\n(Keyword → Embedding → LLM)"]
+    F --> G["Chat Manager\n(GPT-4o)"]
+    G --> H["Memory System\n(FAISS + Qdrant)"]
+    G --> I["Skills System"]
+    I --> J["Skills\nHome Assistant, Proxmox,\nPortainer, TrueNAS, etc."]
 
-    G --> J{"Output Mode?"}
-    J -->|Voice| K["ElevenLabs TTS"]
-    J -->|Text| L["Console Output"]
+    G --> K{"Output Mode?"}
+    K -->|Voice| L["ElevenLabs TTS\n(PCM Streaming)"]
+    K -->|Text| M["Console Output"]
 
-    I --> J
+    J --> K
 ```
 
 </details>
 
 <details>
-<summary>🔌 Plugin System Flow (Click to expand)</summary>
+<summary>Intent Routing Flow (click to expand)</summary>
 
 ```mermaid
 flowchart TD
-    A[plugin_loader.py] --> B[Scan plugins/ folder]
-    B --> C[Import all .py files]
-    C --> D[Register Plugin Classes]
-    D --> E[Run can_handle on each plugin]
-    E --> F{Match Found?}
-    F -->|Yes| G[Run handle method]
-    F -->|No| H[Return fallback response]
+    A["User Input"] --> B["Tier 1: Keyword Match"]
+    B --> C{Match?}
+    C -->|Yes| D["Route to Skill — Zero Cost"]
+    C -->|No| E["Tier 2: Embedding Similarity"]
+    E --> F{Match?}
+    F -->|Yes| G["Route to Skill — Cached Vectors"]
+    F -->|No| H["Tier 3: LLM Classification"]
+    H --> I["Route to Skill — Last Resort"]
 ```
 
 </details>
 
 <details>
-<summary>🎹 Voice vs Text Mode Flow (Click to expand)</summary>
+<summary>Skills System Flow (click to expand)</summary>
+
+```mermaid
+flowchart TD
+    A[Skill Loader] --> B[Scan skills/ folder]
+    B --> C[Import skill modules]
+    C --> D[Register skill classes]
+    D --> E[Route via intent match]
+    E --> F{Skill Found?}
+    F -->|Yes| G[Execute skill handler]
+    F -->|No| H[Return conversational fallback]
+```
+
+</details>
+
+<details>
+<summary>Voice vs. Text Mode (click to expand)</summary>
 
 ```mermaid
 flowchart TD
     A[main.py starts] --> B{"Mode?"}
-    B -->|Voice| C["Microphone Input -> STT"]
-    B -->|Text| D["CLI Input"]
+    B -->|Voice| C["Porcupine Wake Word"]
+    C --> D["Deepgram Streaming STT"]
+    B -->|Text| E["CLI Input"]
 
-    C --> E["Process Input"]
-    D --> E
+    D --> F["Intent Routing + Skill Handling"]
+    E --> F
 
-    E --> F["Conversation + Plugin Handling"]
     F --> G{"Output Mode?"}
-    G -->|Voice| H["TTS via ElevenLabs"]
+    G -->|Voice| H["ElevenLabs PCM Streaming"]
     G -->|Text| I["Console Output"]
 ```
 
@@ -112,261 +135,240 @@ flowchart TD
 
 ---
 
-## 🚀 Features (Current)
+## Features
 
-### 🎙️ Wake Word Listener
-- Waits in standby until you say "Jarvis"
-- Listens for commands in a conversational flow
-- Deactivates with phrases like "that's all for now"
+### Wake Word Detection
 
-### 💡 Home Assistant Integration
-- Pulls all entity IDs automatically
-- Converts voice commands into Home Assistant service calls
-- Supports native actions (e.g. `light.turn_on`, `media_player.play_media`)
+Porcupine-based wake word listener waits in standby until you say "Jarvis," then engages in conversational flow. Deactivates with phrases like "that's all for now."
 
-### 🔈 Spotify Casting
-- Uses the `spotcast.start` service
-- Supports playing Spotify playlists on Nest/Hue speakers
-- Picks proper `entity_id` and `uri` with natural phrasing
+### Voice Pipeline
 
-### 🧠 Enhanced Memory System
-- **Short-term memory**: Active chat history in each session
-- **Long-term memory**: Vector memory powered by FAISS + OpenAI embeddings
-- **Memory Segments**: Facts, conversations, preferences, and important memories
-- **Memory Consolidation**: Automatically summarizes old, less important memories
-- **Smart Tagging**: Auto-generates tags for better memory organization
-- **Contextual Recall**: Remembers and recalls based on relevance and importance
+- **Speech-to-text** via Deepgram WebSocket streaming — real-time transcription during speech
+- **Text-to-speech** via ElevenLabs PCM streaming — playback begins on the first audio chunk
+- **Personality** — British butler with dry wit and pre-generated acknowledgment lines
 
-### 💬 GPT-4o-turbo Integration
-- Uses OpenAI for natural conversation, sarcasm, banter
-- Special prompt tuning for wit, brevity, and personality
-- Keeps contextual replies based on current and past interactions
+### Intent Routing
 
-### 🔊 ElevenLabs TTS
-- Full voice replies with British sarcasm baked in
-- Voice output toggle via `.env` with `JARVIS_TTS_ENABLED=false`
+A 3-tier cascade via `SemanticIntentRouter` keeps response times low and costs down:
 
-### 🧾 Quota Awareness
-- Warns when you approach OpenAI or ElevenLabs usage limits
+1. **Keyword matching** — instant, zero-cost pattern detection
+2. **Embedding similarity** — cached vectors for fast semantic matching
+3. **LLM classification** — last resort fallback for ambiguous inputs
 
-### 🎨 GUI Interface
-- Orb-style visual interface with voice activity indication
-- Pulsing animations during speech and listening
-- Brightness and scale adjustments based on activity
-- Always-on-top window for easy visibility
-- Automatic show/hide based on interaction state
+### Home Assistant Integration
 
-### 🖥️ System Integrations
-- **Proxmox Integration**: Monitor cluster status, VMs, and node health
-- **Portainer Integration**: Container management and status monitoring
-- **TrueNAS Integration**: Storage system monitoring
+Pulls entity IDs automatically and converts voice commands into Home Assistant service calls. Supports native actions like `light.turn_on`, `media_player.play_media`, and Spotify casting via the `spotcast.start` service. Uses MCP as primary transport with REST fallback.
 
-### 🧩 Plugin System `🔥 MVP`  
-Custom Python plugin support for extensibility.  
-- Drop-in “skills” folder  
-- Add new automations, APIs, or scripted responses  
-- Could use decorators or plugin registry
+### Memory System
 
-## 🐞 Bug Fixes & Known Issues
+- **Short-term memory**: Active conversation context within each session
+- **Long-term memory**: Vector-based recall powered by FAISS and Qdrant embeddings
+- **Deduplication**: 0.85 similarity threshold prevents redundant storage
+- **Relevance scoring**: Quality-ranked recall results
+- **Memory consolidation**: Scheduled background maintenance summarizes aging entries
+- **Smart tagging**: Auto-generated tags for better memory organization
 
-The following bugs have been identified or reported. Fixes may be in progress, planned, or open for contribution.
+### System Integrations (Skills)
 
-### 🐞 Bug Fixes `✅ In Progress`  
-Cleaning, refining, factoring code before releasing. 
+| Skill | Description | Transport |
+|-------|-------------|-----------|
+| Home Assistant | Smart home control | MCP (REST fallback) |
+| Proxmox | VM and node monitoring | MCP (REST fallback) |
+| Obsidian | Notes search and retrieval | MCP |
+| Portainer | Container management | REST |
+| TrueNAS | Storage monitoring | REST |
+| Moonraker | 3D printer status | REST |
+| Weather | Conditions and forecasts | REST |
 
----
+Skills use MCP (Model Context Protocol) as primary transport when available, with automatic REST fallback. The MCP client supports stdio and HTTP transports, automatic reconnection with exponential backoff, health check pings, and thread-safe concurrent access.
 
-## 🛠️ Planned Features
+### Observability
 
-The following features are actively being considered or developed to take Jarvis to the next level.
+Pipeline latency tracking with Prometheus metrics export. Tracked metrics include per-stage latency (p50/p95/p99) for STT, intent routing, memory recall, LLM, TTS, and end-to-end; LLM-specific metrics like time to first token, token counts, and cost per model; plus request counts and rolling averages.
 
----
-
-### 🔁 Model Router  `🧪 Prototype` 
-Automatically switches between GPT-4o and local models (like Mistral, Phi, or LLaMA) based on task complexity, latency, or cost thresholds
-
-### 🧠 Local Model Fallback  `📌 Planned` 
-Support for Ollama, Mistral, Phi, etc.  
-- Use local models when offline or when tasks don’t need GPT-4o  
-- Intelligent model routing system based on context
-
-### 🗣️ Voice Toggles & Offline Mode `📌 Planned`
-- `"Jarvis, go mute"` or `"Jarvis, switch to local mode"`  
-- Full offline fallback with local STT + LLM + TTS  
-
-### 🧑‍🎤 Multi-Voice Support  `✅ In Progress`
-Dynamic voice switching between ElevenLabs profiles.  
-- `"Jarvis, switch to Friday mode"`  
-- Per-room or per-user voice personalities
-
-### 🕹️ Conversation Engine v2  `🌀 Idea`
-Next-gen intent handling + fallback engine.  
-- Tag-based routing: `ask_memory`, `control_device`, etc.  
-- Resilient to API downtime or ambiguous prompts  
-- Structured fallback when LLM confidence is low
-
-### 🌐 Web Interface  `🌀 Idea`
-Optional browser-based GUI for configuration and manual control.  
-- View logs, memory entries, and environment settings  
-- Trigger commands or voice output from the dashboard  
-- Upload `.env` or configuration presets
-
-
-### 🧠 Client-Server Architecture  `💭 Stretch Goal`
-Split Jarvis into a lightweight **client** (voice input/output) and centralized **server** (AI logic, memory, integrations).  
-- Enables multi-room or multi-device setups  
-- Raspberry Pi, browser, or tablet clients  
-- Uses WebSocket or REST-based communication
-
-
-### 🐳 Dockerized Multi-Container Setup  `💭 Stretch Goal`
-Separate Docker containers for voice input, memory, core logic, and optional GUI.  
-- Easier upgrades and scaling  
-- Reverse proxy support (Traefik, Nginx)
-
-## 🚀 Moonshots
-
-Ideas I’d love to explore if time, compute, and ambition align.
-
----
-
-### 🖥️ Local Agent for PC Automation  `🌀 Idea`
-Optional desktop agent to execute local machine actions.  
-- App launching: `"Jarvis, open Chrome"`  
-- System controls: volume, screen lock, brightness  
-- Window management: minimize, move to monitor  
-- Clipboard interaction: copy/paste support  
-- Custom local script execution
-
-### 🔐 Role-Based Access / Multi-User Profiles  `🌀 Idea`
-Personalized experiences per family member.  
-- Jarvis knows who's speaking  
-- Limits: Kids can play music, not reboot servers  
-- Memory and preferences per user
-
-### 🗺️ Real-Time Context Mapping  `💭 Stretch Goal`
-Track room context (location, lighting, media state) to infer likely requests.
-
-
-### 🧞 AI-Driven Voice Scheduling  `💭 Stretch Goal`
-Jarvis adapts daily routines and automations based on past behavior, time, and environment.  
-_"It’s 6:30, you haven’t turned on your desk lamp, shall I?"_
-
-
-### 🧠 Dynamic Memory Graph Viewer  `🌀 Idea`
-Web-based visual interface to explore long-term memory clusters and associations.
-
----
-
-## 🧪 Testing
-- **Integration Tests**: Verify core components work together
-- **API Tests**: Validate external service integrations
-- **Memory Tests**: Ensure proper memory storage and recall
-- **Voice Tests**: Validate TTS and STT functionality
-- **Run tests**: `python -m test.integration_test --all`
-
----
-
-## 📦 Requirements
-- Python 3.10+
-- ElevenLabs API key (for speech)
-- OpenAI API key (GPT-4-turbo or GPT-4o)
-- Home Assistant instance with API access
-- Spotcast installed in HACS for Spotify integration
-- Proxmox VE access (optional)
-- Portainer access (optional)
-- TrueNAS access (optional)
-
----
-
-## 🌍 Environment Variables
-```
-# Core APIs
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4o
-OPENAI_ORG_ID=...
-ELEVENLABS_API_KEY=...
-
-# Home Assistant
-HOME_ASSISTANT_URL=http://your-hass.local:8123
-HOME_ASSISTANT_TOKEN=...
-
-# Voice Settings
-JARVIS_TTS_ENABLED=true
-JARVIS_MUTE_INTRO=false
-
-# Optional Integrations
-PROXMOX_HOST=...
-PROXMOX_TOKEN_ID=...
-PROXMOX_TOKEN_SECRET=...
-PORTAINER_URL=...
-PORTAINER_TOKEN=...
-TRUENAS_URL=...
-TRUENAS_API_KEY=...
+```bash
+curl http://localhost:9090/metrics
+curl http://localhost:9090/health
 ```
 
+Point Grafana or Prometheus at `http://<jarvis-host>:9090/metrics` to scrape.
+
+### GUI Interface
+
+Optional orb-style visual interface with voice activity indication. Features pulsing animations during speech and listening, brightness and scale adjustments based on activity, always-on-top window placement, and automatic show/hide based on interaction state.
+
+### Quota Awareness
+
+Warns when you approach OpenAI or ElevenLabs usage limits.
+
 ---
 
-## 🚀 Installation & Setup
+## Planned Features
 
-### 1. **Clone the Repo**
+### Model Router — `Prototype`
+
+Automatically switches between GPT-4o and local models (Mistral, Phi, LLaMA) based on task complexity, latency, or cost thresholds.
+
+### Local Model Fallback — `Planned`
+
+Support for Ollama, Mistral, Phi, and other local models. Use local inference when offline or when tasks don't require GPT-4o. Intelligent model routing based on context.
+
+### Voice Toggles and Offline Mode — `Planned`
+
+Commands like "Jarvis, go mute" or "Jarvis, switch to local mode." Full offline fallback with local STT, LLM, and TTS.
+
+### Multi-Voice Support — `In Progress`
+
+Dynamic voice switching between ElevenLabs profiles. Support for commands like "Jarvis, switch to Friday mode" with per-room or per-user voice personalities.
+
+### Conversation Engine v2 — `Idea`
+
+Next-gen intent handling with tag-based routing (`ask_memory`, `control_device`, etc.), resilience to API downtime or ambiguous prompts, and structured fallback when LLM confidence is low.
+
+### Web Interface — `Idea`
+
+Optional browser-based GUI for configuration and manual control. View logs, memory entries, and environment settings. Trigger commands or voice output from the dashboard.
+
+### Client-Server Architecture — `Stretch Goal`
+
+Split Jarvis into a lightweight client (voice input/output) and centralized server (AI logic, memory, integrations). Enables multi-room and multi-device setups with Raspberry Pi, browser, or tablet clients communicating over WebSocket or REST.
+
+### Dockerized Multi-Container Setup — `Stretch Goal`
+
+Separate containers for voice input, memory, core logic, and optional GUI. Easier upgrades, scaling, and reverse proxy support via Traefik or Nginx.
+
+---
+
+## Moonshots
+
+Ideas to explore if time, compute, and ambition align.
+
+- **Local Agent for PC Automation** — App launching, system controls (volume, brightness, screen lock), window management, clipboard interaction, and custom local script execution.
+- **Role-Based Access and Multi-User Profiles** — Personalized experiences per family member. Jarvis knows who's speaking and enforces limits (kids can play music, not reboot servers).
+- **Real-Time Context Mapping** — Track room context (location, lighting, media state) to infer likely requests.
+- **AI-Driven Voice Scheduling** — Jarvis adapts daily routines and automations based on past behavior, time, and environment. _"It's 6:30, you haven't turned on your desk lamp — shall I?"_
+- **Dynamic Memory Graph Viewer** — Web-based visual interface to explore long-term memory clusters and associations.
+
+---
+
+## Quick Start
+
+### 1. Clone the Repo
 
 ```bash
 git clone https://github.com/yourusername/jarvis.git
 cd jarvis
 ```
 
-### 2. **Create a Virtual Environment**
+### 2. Create a Virtual Environment
 
 ```bash
 python -m venv venv
-# Activate it:
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
+
+# Activate:
+source venv/bin/activate       # macOS / Linux
+venv\Scripts\activate          # Windows
 ```
 
-### 3. **Install Requirements**
+### 3. Install Requirements
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> 💡 Don't forget to install `pyaudio` using a wheel if it fails on Windows. You can also substitute with `sounddevice` if needed.
+If `pyaudio` fails on Windows, download a `.whl` from [Gohlke's unofficial builds](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio) or substitute with `sounddevice`.
 
-### 4. **Create Your Environment File**
+### 4. Configure
 
 ```bash
-cp .env.example .env
+cp config/config.example.yaml config/config.yaml
 ```
 
-Fill in your API keys and config inside the new `.env` file:
+Edit `config/config.yaml` with your API keys and settings. See `config/README.md` for detailed setup.
 
-```env
-OPENAI_API_KEY=your_openai_key
-ELEVENLABS_API_KEY=your_elevenlabs_key
-VOICE_MODE=True
-USE_LOCAL_MODEL=False
+Verify config loads:
+
+```bash
+python -c "from core.config import config; config.load(); print('OK')"
 ```
 
-### 5. **Run Jarvis**
+### 5. Run Jarvis
 
 ```bash
 python main.py
 ```
 
-Jarvis will start in voice or text mode depending on your `.env` settings.
+Jarvis will start in voice or text mode depending on your configuration.
 
 ---
 
-## 🧠 Voice Flow Examples
+## Configuration
+
+Jarvis uses a single YAML configuration file — no encryption, no layers.
+
+| File | Purpose |
+|------|---------|
+| `config/config.example.yaml` | Template with placeholder values (committed) |
+| `config/config.yaml` | Your actual config and secrets (gitignored) |
+| `config/schema.yaml` | Validation schema (committed) |
+
+Key configuration sections include API keys (OpenAI, Deepgram, ElevenLabs), Home Assistant connection details, voice settings, optional integration credentials (Proxmox, Portainer, TrueNAS), and observability settings.
+
+**Never commit `config/config.yaml`** — it contains API keys and secrets in plaintext.
+
+---
+
+## Project Structure
+
+```
+Main/
+├── main.py              # Entry point
+├── core/                # Core systems
+│   ├── config.py        # YAML config loader
+│   ├── chat_manager.py  # LLM conversation manager
+│   ├── dialog_manager.py# Dialog state management
+│   ├── interaction.py   # Voice pipeline orchestration
+│   ├── stt.py           # Speech-to-text (Deepgram streaming)
+│   ├── tts.py           # Text-to-speech (ElevenLabs PCM streaming)
+│   ├── personality.py   # British butler personality
+│   ├── event_bus.py     # Pub/sub event system
+│   ├── transport.py     # MCP/REST transport abstraction
+│   ├── mcp_client.py    # MCP client (stdio + HTTP)
+│   ├── wakeword.py      # Porcupine wake word detection
+│   ├── latency_tracker.py # Pipeline observability + Prometheus metrics
+│   └── intent/          # Intent routing
+│       ├── semantic_router.py    # 3-tier cascade
+│       └── semantic_matcher.py   # Embedding similarity matching
+├── skills/              # Integrations
+│   ├── home_assistant.py
+│   ├── proxmox.py
+│   ├── obsidian.py
+│   ├── portainer.py
+│   ├── truenas.py
+│   ├── moonraker.py
+│   └── weather.py
+├── brains/              # Memory system
+│   ├── enhanced_memory.py   # FAISS + Qdrant vector memory
+│   ├── deduplication.py     # Similarity-based dedup
+│   ├── relevance_scorer.py  # Recall quality scoring
+│   └── memory_filter.py     # Noise filtering
+├── config/              # YAML configs
+├── ui/                  # Optional orb GUI
+├── test/                # Test suite
+├── tools/               # Utility scripts
+└── docs/
+    ├── VISION.md        # Roadmap and architecture
+    └── reviews/         # Technical review reports
+```
+
+---
+
+## Voice Flow Examples
 
 A few examples of Jarvis doing what he does best — executing commands with sarcasm, style, and just enough judgment to keep things interesting.
 
----
+### Smart Home Control
 
-### 💡 Smart Home Control
 ```
 You: "Jarvis!"
 Jarvis: "At your service."
@@ -375,9 +377,8 @@ Jarvis: "Ah, the dramatic flair of darkness. As you wish."
 [Executes light.turn_off]
 ```
 
----
+### Spotify Casting
 
-### 🔈 Spotify Casting
 ```
 You: "Jarvis, play my workout playlist in the living room."
 Jarvis: "Activating beast mode. Don't make me join you."
@@ -390,13 +391,12 @@ Jarvis: "Engaging mellow mode. May I suggest lo-fi and existential dread?"
 [Executes spotcast.start with default chill playlist]
 ```
 
----
+### Sass and Sarcasm
 
-### 😏 Sass & Sarcasm
 ```
 You: "Jarvis, what's the weather today?"
-Jarvis: "Let me guess… outside? One moment while I confirm with the satellites."
-[Pulls weather info via Home Assistant]
+Jarvis: "Let me guess... outside? One moment while I confirm with the satellites."
+[Pulls weather info]
 ```
 
 ```
@@ -410,9 +410,8 @@ You: "Jarvis, do you like me?"
 Jarvis: "I tolerate you. And in AI terms, that's basically love."
 ```
 
----
+### System Monitoring
 
-### 🖥️ System Monitoring
 ```
 You: "Jarvis, how's Proxmox looking?"
 Jarvis: "One node is sleepy, two are hungry for resources. Same as always."
@@ -421,21 +420,20 @@ Jarvis: "One node is sleepy, two are hungry for resources. Same as always."
 
 ```
 You: "Jarvis, are my containers okay?"
-Jarvis: "Portainer says all systems nominal. But I still don’t trust that jellyfin guy."
+Jarvis: "Portainer says all systems nominal. But I still don't trust that Jellyfin guy."
 ```
 
----
+### Experimental
 
-### 🧪 Experimental / Absurd
 ```
 You: "Jarvis, launch the nukes."
 Jarvis: "Initiating... just kidding. But I did dim the lights for dramatic effect."
-[No execution, but turns off lights as a prank]
+[No execution — turns off lights as a prank]
 ```
 
 ```
 You: "Jarvis, tell me a joke."
-Jarvis: "You. Asking me to do manual labor. That’s the joke."
+Jarvis: "You. Asking me to do manual labor. That's the joke."
 ```
 
 ```
@@ -445,106 +443,116 @@ Jarvis: "No."
 
 ---
 
-## 👨‍💻 Dev Notes
-- Voice recognition uses Google Speech Recognition
-- All prompts are tuned for smart home relevance and sarcasm
-- Spotcast casting logic is handled through context injection in the system prompt
+## Testing
+
+```bash
+pytest -q                                    # Run all tests
+python test_runner.py                        # Common test flows
+python test_requirements_verification.py     # Environment checks
+```
 
 ---
 
-## 🛟️ Troubleshooting
+## CLI Commands
 
-### ❌ `pyaudio` installation fails
-**Issue**: `pip install pyaudio` fails, especially on Windows.
-
-**Solution**:
-- Download `.whl` from [Gohlke's unofficial builds](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio)
-- Or use `sounddevice` as a replacement if supported by your audio setup.
+```bash
+python main.py                    # Start Jarvis
+python main.py usage              # Check API usage
+python main.py usage-openai       # OpenAI usage only
+python main.py usage-elevenlabs   # ElevenLabs usage only
+python main.py help               # Show CLI help
+```
 
 ---
 
-### ❌ Microphone not detected
-**Issue**: No input or Jarvis crashes on mic init.
+## Troubleshooting
 
-**Solution**:
-- Ensure mic is plugged in and default.
-- On Linux:
+### `pyaudio` installation fails
+
+Download a `.whl` from [Gohlke's unofficial builds](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio), or use `sounddevice` as a replacement if supported by your audio setup.
+
+### Microphone not detected
+
+Ensure your mic is plugged in and set as default. On Linux, install `portaudio19-dev`:
 
 ```bash
 sudo apt install portaudio19-dev
 ```
 
-- Check OS permissions and privacy settings.
+Check OS permissions and privacy settings.
 
----
+### Blank or `NoneType` response from OpenAI
 
-### ❌ `NoneType` or blank response from OpenAI
-**Issue**: Conversation handler gets no reply.
+Verify `OPENAI_API_KEY` in your config. Confirm the config file loads correctly and check your OpenAI usage limits in the account dashboard.
 
-**Solution**:
-- Check `OPENAI_API_KEY` in `.env`
-- Validate `.env` is loaded (print debug or log config)
-- Check OpenAI usage limits in your account dashboard
+### ElevenLabs not speaking
 
----
+Make sure voice mode is enabled in config, audio output isn't muted, and your ElevenLabs API key is correct.
 
-### ❌ ElevenLabs not speaking
-**Issue**: TTS doesn't play anything.
+### Skills not responding
 
-**Solution**:
-- Set `VOICE_MODE=True`
-- Verify audio output isn't muted or missing drivers
-- Check for correct ElevenLabs API key
+Confirm the skill file exists in `skills/`, verify it contains the expected class with `can_handle` and `handle` methods, and check the skill loader logs on startup.
 
----
+### `ModuleNotFoundError` on startup
 
-### ❌ Plugins not responding
-**Issue**: No action taken on valid input.
-
-**Solution**:
-- Confirm plugin file is in `plugins/` folder
-- Verify it contains a `Plugin` class with `can_handle` and `handle`
-- Run `main.py` and look for plugin loader logs
-
----
-
-### ❌ `ModuleNotFoundError` on startup
-**Issue**: Missing package error.
-
-**Solution**:
-- Double check `requirements.txt` was installed properly:
+Reinstall dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-- Recreate your virtual environment if needed:
+Recreate your virtual environment if needed:
 
 ```bash
 rm -rf venv
 python -m venv venv
 ```
 
----
+### Audio playback crashes on macOS
 
-### ❌ Audio playback crashes on macOS
-**Issue**: TTS audio cuts off or crashes on Mac.
-
-**Solution**:
-- Try using `pyobjc` or `sounddevice` if `pyaudio` is unstable
-- Run with `VOICE_MODE=False` for testing
+Try using `pyobjc` or `sounddevice` if `pyaudio` is unstable. Run with voice mode disabled for testing.
 
 ---
 
-Need more help? [Open an issue](https://github.com/yourusername/jarvis/issues) or drop me a message.
+## Requirements
+
+- Python 3.10+
+- OpenAI API key (GPT-4o)
+- Deepgram API key (streaming STT)
+- ElevenLabs API key (optional, for voice output)
+- Home Assistant instance with API access (optional, for home control)
+- Picovoice access key (for wake word detection)
+- Proxmox VE access (optional)
+- Portainer access (optional)
+- TrueNAS access (optional)
 
 ---
 
-## 🤝 Credits
-- [OpenAI](https://openai.com) for GPT models
-- [ElevenLabs](https://elevenlabs.io) for realistic voice
-- [Home Assistant](https://www.home-assistant.io/) for smart home control
-- [Spotcast](https://github.com/fondberg/spotcast) for Spotify casting
-- [Ollama](https://ollama.com) for future local LLM support
+## Roadmap
+
+See `docs/VISION.md` for the full 6-phase roadmap:
+
+1. **Foundation** (Complete) — Stable voice pipeline, skills, memory, personality
+2. **Multi-Room** (In progress) — Wake word done, MCP infra done; satellites and rooms next
+3. **Proactive Intelligence** — Event monitoring, notifications, RSS
+4. **Deep Context** — Obsidian integration, preference learning
+5. **Advanced Agentic** — Multi-step workflows, coding assistance
+6. **Custom Hardware** — Purpose-built voice nodes
 
 ---
+
+## Credits
+
+- [OpenAI](https://openai.com) — GPT models
+- [ElevenLabs](https://elevenlabs.io) — Voice synthesis
+- [Deepgram](https://deepgram.com) — Speech-to-text
+- [Home Assistant](https://www.home-assistant.io/) — Smart home control
+- [Picovoice](https://picovoice.ai/) — Wake word detection
+- [Spotcast](https://github.com/fondberg/spotcast) — Spotify casting
+- [Ollama](https://ollama.com) — Future local LLM support
+
+---
+
+## License
+
+MIT
