@@ -5,7 +5,7 @@
 ![Status](https://img.shields.io/badge/Status-Internal%20WIP-orange)
 ![Jarvis](https://img.shields.io/badge/Jarvis-Home%20AI%20Assistant-9cf?logo=home-assistant)
 
-> **This project is under active development. Expect quirks, sarcasm, and the occasional snarky bug.**
+> **This project is under active development. Only the README is posted publicly for now — the codebase is still being cleaned up and isn't ready for release yet. Stay tuned.**
 
 > "If I had a body, I'd roll my eyes at you right now. Fortunately for us both, I don't."
 > — Jarvis
